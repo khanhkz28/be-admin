@@ -1,33 +1,33 @@
-# Sử dụng PHP 8.2 với Apache
-FROM php:8.2-apache
+FROM php:8.2-fpm
 
-# Cài đặt các thư viện cần thiết cho Laravel
+WORKDIR /var/www
+
 RUN apt-get update && apt-get install -y \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    zip \
-    unzip \
     git \
     curl \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install gd pdo pdo_mysql
+    zip \
+    unzip \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    libzip-dev \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
-# Cài đặt Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Đặt thư mục làm việc trong container
-WORKDIR /var/www/html
+COPY composer.json composer.lock ./
 
-# Copy toàn bộ project vào container
+# ⚠️ Không chạy scripts khi chưa đủ source code
+RUN composer install --optimize-autoloader --no-dev --no-scripts
+
 COPY . .
 
-# Cấp quyền cho storage và bootstrap/cache
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+# ✅ Giờ chạy script sau khi đã có đủ source code
+RUN composer run-script post-autoload-dump || true
+RUN php artisan config:clear
 
-# Kích hoạt mod_rewrite trong Apache
-RUN a2enmod rewrite
+RUN chmod -R 775 storage bootstrap/cache
 
-# Khởi động Apache
-CMD ["apache2-foreground"]
+EXPOSE 8000
+
+CMD php artisan serve --host=0.0.0.0 --port=8000
